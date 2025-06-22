@@ -3,6 +3,9 @@
 //|                        Copyright 2023, 你的名字或公司名 |
 //|                                             https://www.example.com |
 //+------------------------------------------------------------------+
+#include <Trade\Trade.mqh>
+#include <Trade\AccountInfo.mqh>
+
 #property copyright "Copyright 2023, 你的名字或公司名"
 #property link      "https://www.example.com"
 #property version   "1.00"
@@ -20,13 +23,13 @@ double oio_mid = 0;          // OIO结构的中点
 datetime oio_bar_time = 0;   // OIO结构第三根K线的开盘时间，用于标识OIO结构
 
 // 订单票据
-long buy_stop_limit_ticket = 0;    // 多单限价单票据
-long sell_stop_limit_ticket = 0;   // 空单限价单票据
-long second_buy_limit_ticket = 0;  // 第二张多单限价单票据
-long second_sell_limit_ticket = 0; // 第二张空单限价单票据
+ulong buy_stop_limit_ticket = 0;    // 多单限价单票据 (ulong for MQL5 order tickets)
+ulong sell_stop_limit_ticket = 0;   // 空单限价单票据 (ulong for MQL5 order tickets)
+ulong second_buy_limit_ticket = 0;  // 第二张多单限价单票据 (ulong for MQL5 order tickets)
+ulong second_sell_limit_ticket = 0; // 第二张空单限价单票据 (ulong for MQL5 order tickets)
 
-long first_order_ticket = 0;      // 记录第一张被触发的订单的票据
-int first_order_type = -1;        // 记录第一张被触发的订单类型 (ORDER_TYPE_BUY 或 ORDER_TYPE_SELL)
+ulong first_order_ticket = 0;      // 记录第一张被触发的订单的票据 (ulong for MQL5 position/order tickets)
+int first_order_type = -1;        // 记录第一张被触发的订单类型 (POSITION_TYPE_BUY 或 POSITION_TYPE_SELL)
 
 
 //+------------------------------------------------------------------+
@@ -36,7 +39,7 @@ int OnInit()
   {
    //--- 初始化注释
    Print("OIO EA 初始化...");
-   Print("EA版本: ", __FILE__, " ", __DATE__, " ", __TIME__);
+   Print("EA版本: ", __FILE__, " ", __DATE__, " ", TimeToString(TimeCurrent(), TIME_SECONDS));
    Print("策略：OIO (Outside-Inside-Outside)");
 
    //--- 检查交易手数，这里默认为1手，后续可以改为输入参数
@@ -746,14 +749,14 @@ void SetupLimitOrders()
  * @param ticket_var 用于存储订单票据的变量引用
  * @return bool 是否成功发送请求 (注意，这不代表订单一定成功执行)
  */
-bool PlaceOrder(ENUM_TRADE_ACTION action, string symbol, double volume, ENUM_ORDER_TYPE type, double price, double sl, double tp, string comment, ulong magic, long &ticket_var)
+bool PlaceOrder(ENUM_TRADE_REQUEST_ACTIONS trade_action_param, string symbol, double volume, ENUM_ORDER_TYPE type, double price, double sl, double tp, string comment, ulong magic, ulong &ticket_var)
   {
    MqlTradeRequest request;
    MqlTradeResult result;
    ZeroMemory(request);
    ZeroMemory(result);
 
-   request.action   = action;
+   request.action   = trade_action_param; // 使用修改后的参数名
    request.symbol   = symbol;
    request.volume   = volume;
    request.type     = type;
@@ -768,17 +771,19 @@ bool PlaceOrder(ENUM_TRADE_ACTION action, string symbol, double volume, ENUM_ORD
 
    if(!OrderSend(request, result))
      {
-      Print("OrderSend 失败. 返回代码: ", GetLastError(), " - ", ErrorDescription(GetLastError()));
-      Print("请求参数: action=", EnumToString(action), ", symbol=", symbol, ", volume=", volume, ", type=", EnumToString(type),
+      Print("OrderSend 失败. 返回代码: ", result.retcode, ", GetLastError(): ", GetLastError()); // 移除了 ErrorDescription, 添加 result.retcode
+      Print("请求参数: action=", EnumToString(request.action), ", symbol=", symbol, ", volume=", volume, ", type=", EnumToString(type),
             ", price=", DoubleToString(price, _Digits), ", sl=", DoubleToString(sl, _Digits), ", tp=", DoubleToString(tp, _Digits));
       ticket_var = 0;
       return false;
      }
 
-   if(result.retcode == TRADE_RETCODE_PLACED || result.retcode == TRADE_RETCODE_DONE || result.retcode == TRADE_RETCODE_REQUEST) // TRADE_RETCODE_REQUEST for pending orders
+   // 对于挂单 (TRADE_ACTION_PENDING), 成功的 retcode 是 TRADE_RETCODE_PLACED
+   // 对于市价单成交或SL/TP修改 (TRADE_ACTION_SLTP, TRADE_ACTION_MODIFY), 成功是 TRADE_RETCODE_DONE
+   if(result.retcode == TRADE_RETCODE_PLACED || result.retcode == TRADE_RETCODE_DONE)
      {
-      Print("订单 #", result.order, " ", comment, " 已成功发送/放置. Retcode: ", result.retcode);
-      ticket_var = result.order;
+      Print("订单 #", result.order, " ", comment, " 已成功发送/放置/执行. Retcode: ", result.retcode);
+      ticket_var = result.order; // ulong to ulong, no data loss
       return true;
      }
    else
@@ -795,9 +800,9 @@ bool PlaceOrder(ENUM_TRADE_ACTION action, string symbol, double volume, ENUM_ORD
  * @param ticket 要删除的订单票据
  * @return bool 是否成功发送删除请求
  */
-bool OrderDelete(long ticket)
+bool OrderDelete(ulong ticket) // 修改参数类型为 ulong
   {
-   if(ticket <= 0) return false;
+   if(ticket == 0) return false; // ulong 比较对象是 0
 
    MqlTradeRequest request;
    MqlTradeResult  result;
@@ -809,7 +814,7 @@ bool OrderDelete(long ticket)
 
    if(!OrderSend(request, result))
      {
-      Print("OrderDelete 发送请求失败 for ticket #", ticket, ". Error: ", GetLastError(), " - ", ErrorDescription(GetLastError()));
+      Print("OrderDelete 发送请求失败 for ticket #", ticket, ". Error Retcode: ", result.retcode, ", GetLastError(): ", GetLastError()); // 移除了 ErrorDescription
       return false;
      }
 
