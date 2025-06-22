@@ -223,7 +223,7 @@ void OnTrade()
      {
       bool first_order_still_open = PositionSelectByTicket(first_order_ticket);
       double first_order_profit = 0;
-      ENUM_DEAL_REASON first_order_close_reason = DEAL_REASON_UNKNOWN;
+      ENUM_DEAL_REASON first_order_close_reason = (ENUM_DEAL_REASON)0; // 使用 DEAL_REASON_UNKNOWN 的数值
 
       if(!first_order_still_open) // 如果第一单已经不在持仓中
         {
@@ -292,7 +292,7 @@ void AdjustTPForBothOrders()
    if(first_order_ticket == 0) return;
    if(second_buy_limit_ticket == 0 && second_sell_limit_ticket == 0) return; // 没有第二单的票据（即使已激活）
 
-   long active_second_order_ticket = (first_order_type == POSITION_TYPE_BUY) ? second_buy_limit_ticket : second_sell_limit_ticket;
+   ulong active_second_order_ticket = (first_order_type == POSITION_TYPE_BUY) ? second_buy_limit_ticket : second_sell_limit_ticket; // 修改为 ulong
    if(!IsOrderActive(active_second_order_ticket)) // 确保第二单也是激活的持仓
      {
       Print("尝试调整止盈，但第二单 #", active_second_order_ticket, " 不是活动持仓。");
