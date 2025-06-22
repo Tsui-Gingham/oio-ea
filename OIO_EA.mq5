@@ -239,7 +239,7 @@ void OnTrade()
                  {
                   first_order_profit = HistoryDealGetDouble(deal_ticket, DEAL_PROFIT);
                   first_order_close_reason = (ENUM_DEAL_REASON)HistoryDealGetInteger(deal_ticket, DEAL_REASON);
-                  Print("历史记录: 第一张订单 #", first_order_ticket, " 已关闭. 盈利: ", first_order_profit, ", 原因: ", EnumToString(first_order_close_reason));
+                  Print("历史记录: 第一张订单 #", first_order_ticket, " 已关闭. 盈利: ", first_order_profit, ", 原因代码: ", (int)first_order_close_reason);
                   break;
                  }
               }
@@ -397,7 +397,7 @@ void AdjustTPForBothOrders()
 //+------------------------------------------------------------------+
 //| 检查订单是否已成为活动持仓 (辅助函数)                             |
 //+------------------------------------------------------------------+
-bool IsOrderActive(long ticket)
+bool IsOrderActive(ulong ticket) // 修改参数类型为 ulong
   {
    if(ticket == 0) return false;
    for(int i = PositionsTotal() - 1; i >= 0; i--)
